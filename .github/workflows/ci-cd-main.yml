@@ -1,4 +1,4 @@
-name: Auth Server CI/CD Pipeline
+name: Batch Server CI/CD Pipeline
 
 on:
   push:
