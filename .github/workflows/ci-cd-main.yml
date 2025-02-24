@@ -1,0 +1,73 @@
+name: Auth Server CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 📥 코드 체크아웃
+      uses: actions/checkout@v3
+
+    - name: 🔧 JDK 17 설정
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+     
+    - name: Cache SonarQube packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.sonar/cache
+        key: ${{ runner.os }}-sonar
+        restore-keys: ${{ runner.os }}-sonar
+          
+    - name: Cache Gradle packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.gradle/caches
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
+        restore-keys: ${{ runner.os }}-gradle
+
+    - name: Build and analyze
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      run: ./gradlew build sonar --info
+
+    - name: 🐳 Docker 이미지 빌드
+      run: |
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/cantech:${{ github.sha }} .
+
+    - name: 🔐 Docker Hub 로그인
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+
+    - name: 📤 Docker Hub로 이미지 Push
+      run: docker push ${{ secrets.DOCKER_USERNAME }}/cantech:${{ github.sha }}
+    
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+  
+    steps:
+    - name: 📥 원격 서버에서 Docker 이미지 Pull 및 실행
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SSH_IP }}
+        username: ${{ secrets.SSH_ID }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.SSH_PORT }}
+        script: |
+          docker stop batch-service || true
+          docker rm batch-service || true
+          docker pull ${{ secrets.DOCKER_USERNAME }}/cantech:${{ github.sha }}
+          docker run -d --name batch-service -p 8080:8080 ${{ secrets.DOCKER_USERNAME }}/cantech:${{ github.sha }}
