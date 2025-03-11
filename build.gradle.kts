@@ -41,6 +41,16 @@ dependencies {
 	// Lombok (테스트 환경)
 	testCompileOnly("org.projectlombok:lombok")
 	testAnnotationProcessor("org.projectlombok:lombok")
+
+	// Spring Cloud Config
+	implementation("org.springframework.cloud:spring-cloud-starter-config")
+	testImplementation("com.h2database:h2")
+}
+
+dependencyManagement {
+	imports {
+		mavenBom("org.springframework.cloud:spring-cloud-dependencies:2023.0.3")
+	}
 }
 
 tasks.withType<Test> {
